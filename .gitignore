@@ -1,0 +1,5 @@
+tmp/
+.vscode/
+*/__pycache__
+input.*
+output.*
