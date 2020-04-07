@@ -16,14 +16,16 @@ def Inp(filename) :
     return ways
 
 # массив очередей к станкам
-# сколько станков? TODO неверно, может быть больше
-def how1ManyMachine(wayMap) :
-    count = max([len(way) for way in wayMap])
-    return count
+def howManyMachine(wayMap) :
+    maxMachin = wayMap[0][0][0]
+    for detail in wayMap :
+        for step in detail :
+            maxMachin = step[0] if maxMachin < step[0] else maxMachin
+    return maxMachin + 1
 
 def queInit(wayMap) :
-    howManyMachine = lambda wayMap : max([len(way) for way in wayMap])
-    machineQue = [[] for _ in range(howManyMachine(wayMap))]
+    count = howManyMachine(wayMap)
+    machineQue = [[] for _ in range(count)]
     
     for detaileIndx in range(len(wayMap)) :
         machine, cost = wayMap[detaileIndx].pop(0)
@@ -44,6 +46,18 @@ def mainProc(wayMap) :
     inProcess = [-1 for _ in range(len(machineQue))]
 
     T = 0
+    # время простоя каждого станка;
+    prostoi = [0 for _ in range(len(inProcess))]
+    # время «пролеживания» деталей в ожидании обработки на каждом станке.
+        # время обработки каждой детали, если пролеживаний не будет
+    def funk(detail) :
+        s = 0
+        for step in detail : s += step[1]
+        return s
+
+    minFullCost = [funk(detail) for detail in wayMap]
+    prolejivanie = [0 for _ in range(len(wayMap))]
+
     times = [0 for _ in range(len(inProcess))]
     log = [{} for _ in range(len(inProcess))]
 
@@ -59,10 +73,9 @@ def mainProc(wayMap) :
         detailIndx = rule(machineQue[machine])
         # добавить в обработку
         detail, cost = machineQue[machine][detailIndx]
-        inProcess[machine] = machineQue[machine][detailIndx]
+        inProcess[machine] = detail
         times[machine] = cost
-        detail = machineQue[machine][detailIndx][0]
-        # отметить время начинания обработки TODO
+        # отметить время начинания обработки
         _writeInLog(machine, detail)
         # удалить из очереди
         machineQue[machine].remove(machineQue[machine][detailIndx])
@@ -73,23 +86,23 @@ def mainProc(wayMap) :
             _letsWork(machine)
 
     # поиск номера станка, на котором обработка закончится ранее всех
-    def findStep(inProcess) :
-        tmp = zip(tuple(range(len(inProcess))), inProcess)
-        tmp = tuple(filter(lambda n : n[1] != -1, tmp))
+    def findStep(times) :
+        tmp = zip(tuple(range(len(times))), times)
+        tmp = tuple(filter(lambda n : n[1] >= 0, tmp))
 
         if len(tmp) == 0 : return -1
 
-        i = tmp[0]  #(machine, (detail, cost))
+        i = tmp[0]  #(machine, time)
         for n in tmp[1:] : 
-            if i[1][1] > n[1][1] : i = n
+            if i[1] > n[1] : i = n
         return i[0]
 
     while True :
         machine = findStep(inProcess)
         if machine == -1 : 
-            return log
+            return log, T, prolejivanie, prostoi
         
-        detail, fullCost = inProcess[machine]
+        detail = inProcess[machine]
         cost = times[machine]
         T += cost
 
@@ -100,10 +113,14 @@ def mainProc(wayMap) :
                 # проверить есть ли в обработке деталь, если есть то
                 if inProcess[i] != -1 :
                     # удалить деталь из обработки inProc
-                    detail, cost = inProcess[i]
+                    detail = inProcess[i]
                     inProcess[i] = -1
                     # отметить время завершения обработки
                     _writeInLog(i, detail, False)
+                    # если это был последний этап обработки детали, то посчитать время пролеживания
+                    if len(wayMap[detail]) == 0 :
+                        prolejivanie[detail] = T - minFullCost[detail]
+
                     # положить эту деталь в очередь на следующий станок
                     if len(wayMap[detail]) > 0 :
                         # найти следующий этап обработки для детали (которая только что закончила обработку)
@@ -113,6 +130,7 @@ def mainProc(wayMap) :
                         # Если деталь была положена в очередь, проверить : в работе ли сейчас машина, в чью очередь полжили деталь
                         if inProcess[newMachine] == -1 :
                             # если машина свободна, то начать обработку на ней
+                            prostoi[newMachine] += abs(times[newMachine])
                             _letsWork(newMachine)
                     
                 
@@ -122,14 +140,9 @@ def mainProc(wayMap) :
                 # проверить очередь, если не пуста добавить в обработку деталь из очереди
                 if len(machineQue[i]) != 0 :
                     #  отметить время начала обработки детали
-                    _letsWork(i)
-        
-        print("f")
-
-        
+                    prostoi[i] += abs(times[i])
+                    _letsWork(i)  
 
 wayMap = Inp("input.txt")
-log = mainProc(wayMap)
-
+log, T, prolejivanie, prostoi = mainProc(wayMap)
 print("f")
-
