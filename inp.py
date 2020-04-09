@@ -32,34 +32,65 @@ def queInit(wayMap) :
         machineQue[machine].append((detaileIndx, cost))    
     return machineQue
 
-def rule(que) :
-    detailIndx = 0
-    # выбираем детать с самой большой стоимостью
-    for i in range(len(que)) :
-        if que[detailIndx][1] < que[i][1] :
-            detailIndx = i
-    
-    return detailIndx
 
-def mainProc(wayMap) :
+def rule(que, ruleIndx, countOfDoneOperations) :
+    # По длительности очередной операции (SIO – правило операции наибольшей продолжительности) max
+    if ruleIndx == 0 :
+        detailIndx = 0
+        # выбираем детать с самой большой стоимостью
+        for i in range(len(que)) :
+            if que[detailIndx][1] < que[i][1] :
+                detailIndx = i
+        return detailIndx
+    else :
+        # Количество операций маршрута, которые уже выполнены max
+        maxDetailIndx = 0
+        maxDetail = que[maxDetailIndx][0]
+        # выбираем детать с самой большой стоимостью
+        for i in range(len(que)) :
+            detail = que[i][0]
+            if countOfDoneOperations[maxDetail] < countOfDoneOperations[detail] :
+                maxDetailIndx = i
+        return maxDetailIndx
+
+def mainProc(wayMap, ruleIndx = 0) :
     machineQue = queInit(wayMap)    # [[(detaileIndx, cost), (detaileIndx, cost)], ]
     inProcess = [-1 for _ in range(len(machineQue))]
-
     T = 0
     # время простоя каждого станка;
     prostoi = [0 for _ in range(len(inProcess))]
-    # время «пролеживания» деталей в ожидании обработки на каждом станке.
-        # время обработки каждой детали, если пролеживаний не будет
+    
     def funk(detail) :
         s = 0
         for step in detail : s += step[1]
         return s
 
+    # время обработки деталей (без пролеживания, только непосредственная обработка)
     minFullCost = [funk(detail) for detail in wayMap]
+    # время пролеживания деталей
     prolejivanie = [0 for _ in range(len(wayMap))]
 
+    # время, как долго еще нужно обрабатывать деталь на станке
     times = [0 for _ in range(len(inProcess))]
+    # количество операций, которые уже выполнены для детали
+    countOfDoneOperations = [0 for i in range(len(wayMap))]
+    # лог работы
     log = [{} for _ in range(len(inProcess))]
+    # лог очередей на станках 
+    queLog = ""
+    def _queLogStep() :
+        # T = 0 :
+        # A : 1, 2, 3;
+        s = 'Т = ' + str(T) + ' : \n'
+        for i in range(len(machineQue)) :
+            s += chr(ord('A') + i) + ' : '
+            for detail, cost in machineQue[i] :
+                s += str(detail) + ', '
+            if inProcess[i] != -1 :
+                s += 'обрабатывается = ' + str(inProcess[i])
+            s += ';\n'
+        s += '\n'
+        return s
 
     def _writeInLog(machine, detail, push = True) :
         # log = [{time0: [(detail1, True)], time1 = [(detail1, False), (detail2, True)] }, {}, ...]
@@ -68,9 +99,9 @@ def mainProc(wayMap) :
         else :
             log[machine][T].append((detail, push))
 
-    def _letsWork(machine) :
+    def _letsWork(machine, ruleIndx, countOfDoneOperations) :
         # найти в очереди индекс детали, которую стоит обработать
-        detailIndx = rule(machineQue[machine])
+        detailIndx = rule(machineQue[machine], ruleIndx, countOfDoneOperations)
         # добавить в обработку
         detail, cost = machineQue[machine][detailIndx]
         inProcess[machine] = detail
@@ -79,11 +110,13 @@ def mainProc(wayMap) :
         _writeInLog(machine, detail)
         # удалить из очереди
         machineQue[machine].remove(machineQue[machine][detailIndx])
-
-    # первый шаг
+    
+    queLog = _queLogStep();
+    
+    # первый шаг, первый запуск машин
     for machine in range(len(machineQue)) :
         if len(machineQue[machine]) > 0 :
-            _letsWork(machine)
+            _letsWork(machine, ruleIndx, countOfDoneOperations)
 
     # поиск номера станка, на котором обработка закончится ранее всех
     def findStep(times) :
@@ -103,9 +136,11 @@ def mainProc(wayMap) :
         return minMahine[0]
 
     while True :
+        queLog += _queLogStep()
+        # поиск номера станка, на котором обработка закончится ранее всех
         machine = findStep(times)
         if machine == -1 : 
-            return log, T, prolejivanie, prostoi
+            return log, T, prolejivanie, prostoi, queLog
         
         detail = inProcess[machine]
         cost = times[machine]
@@ -114,7 +149,6 @@ def mainProc(wayMap) :
         for i in range(len(times)) : times[i] -= cost
 
         for i in range(len(times)) :
-            # assert times[i] >= 0 , "times[i] должно быть >= нуля"
             if times[i] == 0 :
                 assert inProcess[i] != -1 , "times[i] == 0 при inProc[i] != -1"
                 
@@ -132,77 +166,79 @@ def mainProc(wayMap) :
                     # найти следующий этап обработки для детали (которая только что закончила обработку)
                     newMachine, newCost = wayMap[detail].pop(0)
                     machineQue[newMachine].append((detail, newCost))
-
-                #     # Если деталь была положена в очередь, проверить : в работе ли сейчас машина, в чью очередь полжили деталь
-                #     if inProcess[newMachine] == -1 :
-                #         # если машина свободна, то начать обработку на ней
-                #         assert times[newMachine] <= 0 , "время на отдельном станке считается неверно"
-                #         prostoi[newMachine] += abs(times[newMachine])
-                #         _letsWork(newMachine)
                 
-                # # проверить очередь, если не пуста добавить в обработку деталь из очереди
-                # if len(machineQue[i]) != 0 :
-                #     #  отметить время начала обработки детали
-                #     prostoi[i] += abs(times[i])
-                #     _letsWork(i)
-        
+                countOfDoneOperations[detail] += 1
+
         for i in range(len(machineQue)) :
             if inProcess[i] == -1 :
                 # проверить очередь, если не пуста добавить в обработку деталь из очереди
                 if len(machineQue[i]) != 0 :
                     #  отметить время начала обработки детали
                     prostoi[i] += abs(times[i])
-                    _letsWork(i)
+                    _letsWork(i, ruleIndx, countOfDoneOperations)
 
-wayMap = Inp("input.txt")
-log, T, prolejivanie, prostoi = mainProc(wayMap)
 
-for i, machine in enumerate(log):
-    print('станок ' + chr(ord('A') + i))
-    for time, event in machine.items():
-        print(f'\t{time} | {event}')
+with open('out.txt', 'w', encoding='utf8') as file :
+    ...
 
-print(f'простой: {prostoi}')
+# основная работа программы
+for ruleIndx in range(2) :
+    # чтение входных данных
+    wayMap = Inp("input.txt")
 
-def strOut(log, degree) :
-    txt = ''
-    times = [0, ]
-    for i, machine in enumerate(log):
-        txt += ('Станок ' + chr(ord('A') + i) + ' : ')
+    text = "Правило предпочтения : "
+    if ruleIndx == 0 :
+        text += "По длительности очередной операции (SIO – правило операции наибольшей продолжительности) MAX. \n"
+    else :
+        text += "\n\nКоличество операций маршрута, которые уже выполнены MAX. \n"
+
+    log, T, prolejivanie, prostoi, queLog = mainProc(wayMap, ruleIndx)
+
+    def strOut(log, degree) :
+        txt = ''
+        times = [0, ]
+        for i, machine in enumerate(log):
+            txt += ("Станок " + chr(ord('A') + i) + ' : ')
+            last = 0
+            on = None
+            for time, events in machine.items():
+                if times.count(time) <= 0 : times.append(time)
+                ch = '_ ' if on == None else on
+
+                for i in range(last, time, degree) :
+                    txt += ch
+
+                for detail, isStart in events :
+                    on = detail if isStart else None
+                    if isStart :
+                        on = str(detail) if detail > 9 else str(detail) + ' '
+                last = time
+                
+            txt += '\n'
+        # строка временной шкалы
+        times.sort()
+        sT = '           0'
+        sT1 = '           |'
         last = 0
-        on = None
-        for time, events in machine.items():
-            if times.count(time) <= 0 : times.append(time)
-            ch = '_ ' if on == None else on
+        for t in times :
+            x =  ((t - last) // degree) * 2
+            y = len(str(last))
+            if x > y :
+                for i in range(x - y) : sT += ' '
+                for i in range(len(sT) - len(sT1)) : sT1 += ' '
+                sT1 += '|'
+                sT += str(t)
+                last = t
+        txt += (sT1 + '\n' + sT + '\n')
 
-            for i in range(last, time, degree) :
-                txt += ch
+        return txt
 
-            for detail, isStart in events :
-                on = detail if isStart else None
-                if isStart :
-                    on = str(detail) if detail > 9 else str(detail) + ' '
-            last = time
-            
-        txt += '\n'
-    # строка временной шкалы
-    times.sort()
-    sT = '           0'
-    sT1 = '           |'
-    last = 0
-    for t in times :
-        x =  ((t - last) // degree) * 2
-        y = len(str(last))
-        if x > y :
-            for i in range(x - y) : sT += ' '
-            for i in range(len(sT) - len(sT1)) : sT1 += ' '
-            sT1 += '|'
-            sT += str(t)
-            last = t
-    txt += (sT1 + '\n' + sT + '\n')
+    # запись и вывод результатов
+    text += strOut(log, 1)
 
-    return txt
-
-text = strOut(log, 5)
-with open('out.txt', 'w+') as file :
-    file.write(text)
+    text += "Производственный цикл : Т = " + str(T) + '\n'
+    text += "Простои станков: " + "".join([chr(ord('A') + i) + ' = ' + str(prostoi[i]) + '  ' for i in range(len(prostoi))]) + '\n'
+    text += "Время пролеживания деталей : " + "".join([str(i + 1) + ' = ' + str(prolejivanie[i]) + '  ' for i in range(len(prolejivanie))]) + '\n\n'
+    text += "Состояние очередей на станках в \"особенных состояниях\" : " + '\n' + queLog
+    with open('out.txt', 'a', encoding='utf8') as file :
+        file.write(text, )
