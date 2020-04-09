@@ -154,14 +154,55 @@ def mainProc(wayMap) :
                     prostoi[i] += abs(times[i])
                     _letsWork(i)
 
-
-
 wayMap = Inp("input.txt")
 log, T, prolejivanie, prostoi = mainProc(wayMap)
 
 for i, machine in enumerate(log):
-    print(f'machine {i}')
+    print('станок ' + chr(ord('A') + i))
     for time, event in machine.items():
         print(f'\t{time} | {event}')
 
 print(f'простой: {prostoi}')
+
+def strOut(log, degree) :
+    txt = ''
+    times = [0, ]
+    for i, machine in enumerate(log):
+        txt += ('Станок ' + chr(ord('A') + i) + ' : ')
+        last = 0
+        on = None
+        for time, events in machine.items():
+            if times.count(time) <= 0 : times.append(time)
+            ch = '_ ' if on == None else on
+
+            for i in range(last, time, degree) :
+                txt += ch
+
+            for detail, isStart in events :
+                on = detail if isStart else None
+                if isStart :
+                    on = str(detail) if detail > 9 else str(detail) + ' '
+            last = time
+            
+        txt += '\n'
+    # строка временной шкалы
+    times.sort()
+    sT = '           0'
+    sT1 = '           |'
+    last = 0
+    for t in times :
+        x =  ((t - last) // degree) * 2
+        y = len(str(last))
+        if x > y :
+            for i in range(x - y) : sT += ' '
+            for i in range(len(sT) - len(sT1)) : sT1 += ' '
+            sT1 += '|'
+            sT += str(t)
+            last = t
+    txt += (sT1 + '\n' + sT + '\n')
+
+    return txt
+
+text = strOut(log, 5)
+with open('out.txt', 'w+') as file :
+    file.write(text)
