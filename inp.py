@@ -87,18 +87,23 @@ def mainProc(wayMap) :
 
     # поиск номера станка, на котором обработка закончится ранее всех
     def findStep(times) :
-        tmp = zip(tuple(range(len(times))), times)
-        tmp = tuple(filter(lambda n : n[1] >= 0, tmp))
+        tmp = zip(range(len(times)), times)
+        tmp = tuple(filter(lambda m : m[1] > 0, tmp))
 
         if len(tmp) == 0 : return -1
 
-        i = tmp[0]  #(machine, time)
-        for n in tmp[1:] : 
-            if i[1] > n[1] : i = n
-        return i[0]
+        waa = min(tmp, key=lambda n: n[1])[0]
+
+        minMahine = tmp[0]  #(machine, time)
+        for m in tmp[1:] : 
+            if minMahine[1] > m[1] : minMahine = m
+        
+        assert minMahine[0] == waa, "неверный min"
+
+        return minMahine[0]
 
     while True :
-        machine = findStep(inProcess)
+        machine = findStep(times)
         if machine == -1 : 
             return log, T, prolejivanie, prostoi
         
@@ -109,40 +114,54 @@ def mainProc(wayMap) :
         for i in range(len(times)) : times[i] -= cost
 
         for i in range(len(times)) :
-            if times[i] <= 0 :
-                # проверить есть ли в обработке деталь, если есть то
-                if inProcess[i] != -1 :
-                    # удалить деталь из обработки inProc
-                    detail = inProcess[i]
-                    inProcess[i] = -1
-                    # отметить время завершения обработки
-                    _writeInLog(i, detail, False)
-                    # если это был последний этап обработки детали, то посчитать время пролеживания
-                    if len(wayMap[detail]) == 0 :
-                        prolejivanie[detail] = T - minFullCost[detail]
-
-                    # положить эту деталь в очередь на следующий станок
-                    if len(wayMap[detail]) > 0 :
-                        # найти следующий этап обработки для детали (которая только что закончила обработку)
-                        newMachine, newCost = wayMap[detail].pop(0)
-                        machineQue[newMachine].append((detail, newCost))
-
-                        # Если деталь была положена в очередь, проверить : в работе ли сейчас машина, в чью очередь полжили деталь
-                        if inProcess[newMachine] == -1 :
-                            # если машина свободна, то начать обработку на ней
-                            prostoi[newMachine] += abs(times[newMachine])
-                            _letsWork(newMachine)
-                    
+            # assert times[i] >= 0 , "times[i] должно быть >= нуля"
+            if times[i] == 0 :
+                assert inProcess[i] != -1 , "times[i] == 0 при inProc[i] != -1"
                 
-                if inProcess[i] != -1 : 
-                    raise Exception("новая машина для обработки совпадает с предыдущей. Скорее всего ошибка во входных данных -- деталь обрабатывается на одном и том же станке дважды")
+                # удалить деталь из обработки inProc
+                detail = inProcess[i]
+                inProcess[i] = -1
+                # отметить время завершения обработки
+                _writeInLog(i, detail, False)
+                # если это был последний этап обработки детали, то посчитать время пролеживания
+                if len(wayMap[detail]) == 0 :
+                    prolejivanie[detail] = T - minFullCost[detail]
+
+                # положить эту деталь в очередь на следующий станок
+                if len(wayMap[detail]) > 0 :
+                    # найти следующий этап обработки для детали (которая только что закончила обработку)
+                    newMachine, newCost = wayMap[detail].pop(0)
+                    machineQue[newMachine].append((detail, newCost))
+
+                #     # Если деталь была положена в очередь, проверить : в работе ли сейчас машина, в чью очередь полжили деталь
+                #     if inProcess[newMachine] == -1 :
+                #         # если машина свободна, то начать обработку на ней
+                #         assert times[newMachine] <= 0 , "время на отдельном станке считается неверно"
+                #         prostoi[newMachine] += abs(times[newMachine])
+                #         _letsWork(newMachine)
                 
+                # # проверить очередь, если не пуста добавить в обработку деталь из очереди
+                # if len(machineQue[i]) != 0 :
+                #     #  отметить время начала обработки детали
+                #     prostoi[i] += abs(times[i])
+                #     _letsWork(i)
+        
+        for i in range(len(machineQue)) :
+            if inProcess[i] == -1 :
                 # проверить очередь, если не пуста добавить в обработку деталь из очереди
                 if len(machineQue[i]) != 0 :
                     #  отметить время начала обработки детали
                     prostoi[i] += abs(times[i])
-                    _letsWork(i)  
+                    _letsWork(i)
+
+
 
 wayMap = Inp("input.txt")
 log, T, prolejivanie, prostoi = mainProc(wayMap)
-print("f")
+
+for i, machine in enumerate(log):
+    print(f'machine {i}')
+    for time, event in machine.items():
+        print(f'\t{time} | {event}')
+
+print(f'простой: {prostoi}')
